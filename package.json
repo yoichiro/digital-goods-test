@@ -1,0 +1,20 @@
+{
+  "name": "digital-goods-test",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "engines": {
+    "node": "8"
+  },
+  "dependencies": {
+    "actions-on-google": "^2.5.0",
+    "firebase-admin": "^6.3.0",
+    "firebase-functions": "^2.1.0",
+    "googleapis": "^36.0.0",
+    "request": "^2.88.0"
+  },
+  "scripts": {
+    "gcloud-start": "gcloud config set project digital-goods-test-cc9b1",
+    "deploy": "gcloud functions deploy digitalGoodsTest --source . --trigger-http --runtime nodejs8"
+  }
+}
