@@ -149,35 +149,35 @@ app.intent("Gather information", conv => {
 });
 
 app.intent("actions.intent.OPTION", (conv, params, option) => {
-    if (option !== "cancel") {
-        const [skuType, id] = option.split(",");
-        const entitlement = findEntitlement(conv, skuType, id);
-        if (entitlement && consumableProducts.includes(id)) {
-            return new Promise((resolve, reject) => {
-                createJwtClient().authorize((err, tokens) => {
-                    if (err) {
-                        reject(`Auth error: ${err}`);
-                    } else {
-                        consume(tokens, conv, entitlement).then(() => {
-                            conv.close(`You purchased ${entitlement.sku} successfully.`);
-                            resolve();
-                        }).catch(err => {
-                            reject(`API request error: ${err}`);
-                        });
-                    }
+    if (option === "cancel") {
+        conv.ask("Canceled");
+        return;
+    }
+    const [skuType, id] = option.split(",");
+    const entitlement = findEntitlement(conv, skuType, id);
+    if (entitlement && consumableProducts.includes(id)) {
+        return new Promise((resolve, reject) => {
+            createJwtClient().authorize((err, tokens) => {
+                if (err) {
+                    reject(`Auth error: ${err}`);
+                    return;
+                }
+                consume(tokens, conv, entitlement).then(() => {
+                    conv.close(`You purchased ${id} successfully.`);
+                    resolve();
+                }).catch(err => {
+                    reject(`API request error: ${err}`);
                 });
             });
-        } else {
-            conv.ask(new CompletePurchase({
-                skuId: {
-                    skuType: skuType,
-                    id: id,
-                    packageName: packageName
-                }
-            }));
-        }
+        });
     } else {
-        conv.ask("Canceled");
+        conv.ask(new CompletePurchase({
+            skuId: {
+                skuType: skuType,
+                id: id,
+                packageName: packageName
+            }
+        }));
     }
 });
 
