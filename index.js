@@ -9,6 +9,8 @@ const config = require("./config.json");
 const serviceAccount = require(config.serviceAccountKeyFile);
 const packageName = config.packageName;
 
+const consumableProducts = ["coins"];
+
 const app = dialogflow({
     debug: true
 });
@@ -83,6 +85,46 @@ const respondSkus = (conv, body) => {
     }
 };
 
+const findEntitlement = (conv, skuType, id) => {
+    const entitlementGroups = conv.user.entitlements;
+    const entitlementGroup = entitlementGroups.find(x => {
+        return x.packageName === packageName;
+    });
+    if (entitlementGroup) {
+        return entitlementGroup.entitlements.find(x => {
+            return x.skuType === skuType.substring(9)
+                && x.sku === id;
+        });
+    }
+    return undefined;
+};
+
+const consume = (tokens, conv, entitlement) => {
+    return new Promise((resolve, reject) => {
+        const convId = conv.request.conversation.conversationId;
+        const purchaseToken = entitlement.inAppDetails.inAppPurchaseData.purchaseToken;
+        const url = `https://actions.googleapis.com/v3/conversations/${convId}/entitlement:consume`;
+        request.post(url, {
+            auth: {
+                bearer: tokens.access_token
+            },
+            json: true,
+            body: {
+                purchaseToken
+            }
+        }, (err, httpResponse, body) => {
+            if (err) {
+                reject(err);
+            } else {
+                const statusCode = httpResponse.statusCode;
+                const statusMessage = httpResponse.statusMessage;
+                console.log(`${statusCode}: ${statusMessage}`);
+                resolve();
+            }
+        });
+    });
+};
+
 app.intent("Gather information", conv => {
     const SCREEN_OUTPUT = 'actions.capability.SCREEN_OUTPUT';
     if (!conv.surface.capabilities.has(SCREEN_OUTPUT)) {
@@ -108,14 +150,32 @@ app.intent("Gather information", conv => {
 
 app.intent("actions.intent.OPTION", (conv, params, option) => {
     if (option !== "cancel") {
-        const [skuType, id] = option.split(",")
-        conv.ask(new CompletePurchase({
-            skuId: {
-                skuType: skuType,
-                id: id,
-                packageName: packageName
-            }
-        }));
+        const [skuType, id] = option.split(",");
+        const entitlement = findEntitlement(conv, skuType, id);
+        if (entitlement && consumableProducts.includes(id)) {
+            return new Promise((resolve, reject) => {
+                createJwtClient().authorize((err, tokens) => {
+                    if (err) {
+                        reject(`Auth error: ${err}`);
+                    } else {
+                        consume(tokens, conv, entitlement).then(() => {
+                            conv.close(`You purchased ${entitlement.sku} successfully.`);
+                            resolve();
+                        }).catch(err => {
+                            reject(`API request error: ${err}`);
+                        });
+                    }
+                });
+            });
+        } else {
+            conv.ask(new CompletePurchase({
+                skuId: {
+                    skuType: skuType,
+                    id: id,
+                    packageName: packageName
+                }
+            }));
+        }
     } else {
         conv.ask("Canceled");
     }
